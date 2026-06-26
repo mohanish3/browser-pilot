@@ -9,6 +9,12 @@ Examples:
     # Interactive record mode — opens a real browser; click the floating button to screenshot
     browser-pilot --record
     browser-pilot --record --url https://example.com --output recordings/
+
+    # MCP server mode
+    browser-pilot --mcp
+
+    # Session persistence
+    browser-pilot --url https://example.com --session ./my-session
 """
 
 import argparse
@@ -122,6 +128,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to save recorded screenshots and session log (default: recordings/).",
     )
 
+    # Video recording
+    p.add_argument(
+        "--video",
+        metavar="PATH",
+        help="Record a video of the browser session to PATH.",
+    )
+    p.add_argument(
+        "--video-size",
+        metavar="WIDTH,HEIGHT",
+        help="Size for video recording (e.g., 1920,1080).",
+    )
+
+    # Session persistence
+    p.add_argument(
+        "--session",
+        metavar="DIR",
+        help="Use session directory for cookie/state persistence.",
+    )
+
+    # MCP server mode
+    p.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Run as MCP (Model Context Protocol) server for OpenClaw agents.",
+    )
+
     # Info
     p.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
@@ -137,7 +169,15 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
 
     # ------------------------------------------------------------------
-    # Record mode — interactive, headed browser session
+    # MCP server mode
+    # ------------------------------------------------------------------
+    if args.mcp:
+        from .mcp import start_mcp_server
+        start_mcp_server()
+        return 0
+
+    # ------------------------------------------------------------------
+    # Record mode with optional video recording
     # ------------------------------------------------------------------
     if args.record:
         recorder = BrowserRecorder(
@@ -159,7 +199,21 @@ def main(argv=None) -> int:
         headless=not args.headed,
         slow_mo=args.slow_mo,
         timeout=args.timeout,
+        session_dir=args.session,
     ) as pilot:
+        # Handle video recording
+        if args.video:
+            size = None
+            if args.video_size:
+                try:
+                    width, height = map(int, args.video_size.split(","))
+                    size = (width, height)
+                except ValueError:
+                    print(f"error: --video-size expects 'WIDTH,HEIGHT', got: {args.video_size!r}", file=sys.stderr)
+                    return 1
+            pilot.record_video(args.video, size=size)
+            pilot.stop_video()
+
         if args.script:
             run_script(args.script, pilot)
             return 0

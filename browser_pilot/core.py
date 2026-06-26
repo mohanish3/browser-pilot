@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Literal
@@ -32,12 +33,14 @@ class BrowserPilot:
         slow_mo: int = 0,
         viewport: tuple[int, int] = (1280, 720),
         timeout: int = 30_000,
+        session_dir: str | Path | None = None,
     ) -> None:
         self.browser_type = browser
         self.headless = headless
         self.slow_mo = slow_mo
         self.viewport = {"width": viewport[0], "height": viewport[1]}
         self.timeout = timeout
+        self.session_dir = session_dir
 
         self._pw: Playwright | None = None
         self._browser: Browser | None = None
@@ -52,12 +55,43 @@ class BrowserPilot:
         self._pw = sync_playwright().start()
         launcher = getattr(self._pw, self.browser_type)
         self._browser = launcher.launch(headless=self.headless, slow_mo=self.slow_mo)
-        self._context = self._browser.new_context(viewport=self.viewport)
-        self._context.set_default_timeout(self.timeout)
+        
+        # Handle session persistence
+        if self.session_dir:
+            session_dir = Path(self.session_dir)
+            session_dir.mkdir(parents=True, exist_ok=True)
+            cookie_file = session_dir / "cookies.json"
+            if cookie_file.exists():
+                cookies_data = cookie_file.read_text(encoding="utf-8")
+                cookies = json.loads(cookies_data)
+                self._context = self._browser.new_context(
+                    viewport=self.viewport,
+                    storage_state=cookies
+                )
+                self._context.set_default_timeout(self.timeout)
+            else:
+                self._context = self._browser.new_context(viewport=self.viewport)
+                self._context.set_default_timeout(self.timeout)
+        else:
+            self._context = self._browser.new_context(viewport=self.viewport)
+            self._context.set_default_timeout(self.timeout)
+        
         self._page = self._context.new_page()
         return self
 
     def stop(self) -> None:
+        # Save session before stopping
+        if self.session_dir and self._context:
+            session_dir = Path(self.session_dir)
+            session_dir.mkdir(parents=True, exist_ok=True)
+            cookie_file = session_dir / "cookies.json"
+            storage_state = self._context.storage_state()
+            if storage_state:
+                cookie_file.write_text(
+                    json.dumps(storage_state, indent=2),
+                    encoding="utf-8"
+                )
+        
         if self._context:
             self._context.close()
         if self._browser:
@@ -180,10 +214,6 @@ class BrowserPilot:
         Returns:
             PNG bytes of the screenshot.
         """
-        if path is not None:
-            path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-
         kwargs: dict = {"full_page": full_page}
         if path:
             kwargs["path"] = str(path)
@@ -206,6 +236,40 @@ class BrowserPilot:
         path = directory / f"{prefix}_{ts}.png"
         self.screenshot(path, full_page=full_page)
         return path
+
+    # ------------------------------------------------------------------
+    # Video Recording
+    # ------------------------------------------------------------------
+
+    def record_video(
+        self,
+        path: str | Path,
+        *,
+        size: tuple[int, int] | None = None,
+        screen: bool = False,
+    ) -> "BrowserPilot":
+        """
+        Record a video of the browser session.
+
+        Args:
+            path: Path to save the video file.
+            size: Optional video size (width, height). If None, uses viewport.
+            screen: If True, record the entire screen instead of just the browser.
+
+        Returns:
+            Self for method chaining.
+        """
+        if screen:
+            self.page.screencast(str(path))
+        else:
+            self._page.video = self.page.context.new_video_path(str(path))
+        return self
+
+    def stop_video(self) -> "BrowserPilot":
+        """Stop recording and save the video file."""
+        if self._page:
+            self._page.stop_screencast()
+        return self
 
     # ------------------------------------------------------------------
     # Introspection
