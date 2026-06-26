@@ -9,7 +9,7 @@ description = "Navigate pages, click elements, and take screenshots — a lightw
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
-keywords = ["browser", "automation", "playwright", "screenshot", "scraping"]
+keywords = ["browser", "automation", "playwright", "screenshot", "scraping", "mcp"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -24,6 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "playwright>=1.40",
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
