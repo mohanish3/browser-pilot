@@ -64,6 +64,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Wait until this selector is visible before screenshotting.",
     )
 
+    # Data extraction
+    p.add_argument(
+        "--extract",
+        metavar="SELECTOR",
+        help="Extract element text or attribute. Use --extract WHAT SELECTOR where WHAT is 'text' or 'attr', and for attr provide --extract-attr NAME.",
+    )
+    p.add_argument(
+        "--extract-attr",
+        metavar="NAME",
+        dest="extract_attr",
+        help="Attribute name to extract when using --extract with what='attr'.",
+    )
+
+    # Session replay
+    p.add_argument(
+        "--replay",
+        metavar="SESSION.JSON",
+        help="Replay a recorded session from a session.json file.",
+    )
+
     # Screenshot
     p.add_argument(
         "--screenshot",
@@ -111,6 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run a Python script that receives a BrowserPilot instance as `pilot`.",
     )
 
+    # Replay mode
     # Record mode
     p.add_argument(
         "--record",
@@ -167,6 +188,32 @@ def run_script(path: str, pilot: BrowserPilot) -> None:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+
+    # ------------------------------------------------------------------
+    # Replay mode
+    # ------------------------------------------------------------------
+    if args.replay:
+        with BrowserPilot() as pilot:
+            pilot.replay(args.replay)
+        return 0
+
+    # ------------------------------------------------------------------
+    # Data extraction mode
+    # ------------------------------------------------------------------
+    if args.extract:
+        what = "text" if not args.extract_attr else "attr"
+        selector = args.extract
+        name = args.extract_attr
+        with BrowserPilot() as pilot:
+            if args.url:
+                pilot.goto(args.url)
+            result = pilot.extract(selector, what=what, name=name)
+            if result:
+                print(result)
+            else:
+                print(f"No match for selector: {selector!r}", file=sys.stderr)
+                return 1
+        return 0
 
     # ------------------------------------------------------------------
     # MCP server mode

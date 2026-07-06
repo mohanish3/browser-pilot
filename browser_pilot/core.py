@@ -55,7 +55,7 @@ class BrowserPilot:
         self._pw = sync_playwright().start()
         launcher = getattr(self._pw, self.browser_type)
         self._browser = launcher.launch(headless=self.headless, slow_mo=self.slow_mo)
-        
+
         # Handle session persistence
         if self.session_dir:
             session_dir = Path(self.session_dir)
@@ -75,7 +75,7 @@ class BrowserPilot:
         else:
             self._context = self._browser.new_context(viewport=self.viewport)
             self._context.set_default_timeout(self.timeout)
-        
+
         self._page = self._context.new_page()
         return self
 
@@ -91,7 +91,7 @@ class BrowserPilot:
                     json.dumps(storage_state, indent=2),
                     encoding="utf-8"
                 )
-        
+
         if self._context:
             self._context.close()
         if self._browser:
@@ -238,37 +238,118 @@ class BrowserPilot:
         return path
 
     # ------------------------------------------------------------------
-    # Video Recording
+    # Data Extraction
     # ------------------------------------------------------------------
 
-    def record_video(
+    def extract(
         self,
-        path: str | Path,
+        selector: str,
         *,
-        size: tuple[int, int] | None = None,
-        screen: bool = False,
-    ) -> "BrowserPilot":
+        what: Literal["text", "attr"] = "text",
+        name: str | None = None,
+    ) -> str | None:
         """
-        Record a video of the browser session.
+        Extract data from an element.
 
         Args:
-            path: Path to save the video file.
-            size: Optional video size (width, height). If None, uses viewport.
-            screen: If True, record the entire screen instead of just the browser.
+            selector: CSS selector, XPath, or text to match.
+            what: Either "text" (inner text) or "attr" (attribute value).
+            name: Required when what="attr" — the attribute name to read.
+
+        Returns:
+            Extracted text/attribute value, or None if no match found.
+        """
+        if what == "text":
+            return self.page.inner_text(selector)
+        elif what == "attr":
+            if not name:
+                raise ValueError("attr() requires a 'name' argument")
+            return self.page.get_attribute(selector, name)
+        else:
+            raise ValueError(f"Unknown extraction type: {what!r} (use 'text' or 'attr')")
+
+    # ------------------------------------------------------------------
+    # Session Replay
+    # ------------------------------------------------------------------
+
+    def replay(
+        self,
+        session_file: str | Path,
+        *,
+        headless: bool | None = None,
+    ) -> "BrowserPilot":
+        """
+        Replay a recorded session from a session.json file.
+
+        Reads the 'history' array from the session file and re-executes
+        each navigation, click, fill, and screenshot action.
+
+        Args:
+            session_file: Path to a session.json file written by BrowserRecorder.
+            headless: If None, uses the BrowserPilot's headless setting.
 
         Returns:
             Self for method chaining.
         """
-        if screen:
-            self.page.screencast(str(path))
-        else:
-            self._page.video = self.page.context.new_video_path(str(path))
-        return self
+        session_file = Path(session_file)
+        if not session_file.exists():
+            raise FileNotFoundError(f"Session file not found: {session_file}")
 
-    def stop_video(self) -> "BrowserPilot":
-        """Stop recording and save the video file."""
-        if self._page:
-            self._page.stop_screencast()
+        data = json.loads(session_file.read_text(encoding="utf-8"))
+        history = data.get("history", [])
+        screenshots = data.get("screenshots", [])
+
+        effective_headless = self.headless if headless is None else headless
+
+        with BrowserPilot(
+            browser=self.browser_type,
+            headless=effective_headless,
+            timeout=self.timeout,
+        ) as pilot:
+            for i, step in enumerate(history):
+                action = step.get("action", "")
+                url = step.get("url", "")
+                title = step.get("title", "")
+
+                if action == "navigate":
+                    pilot.goto(url)
+                    print(f"  [{i+1}/{len(history)}] Navigate to {title or url}")
+
+                elif action == "click":
+                    selector = step.get("selector", "")
+                    if selector:
+                        pilot.click(selector)
+                        print(f"  [{i+1}/{len(history)}] Click {selector}")
+
+                elif action == "fill":
+                    sel = step.get("selector", "")
+                    value = step.get("value", "")
+                    if sel and value:
+                        pilot.fill(sel, value)
+                        print(f"  [{i+1}/{len(history)}] Fill {sel} = {value}")
+
+                elif action == "screenshot":
+                    path = step.get("path", "")
+                    full_page = step.get("full_page", False)
+                    if path:
+                        pilot.screenshot(path, full_page=full_page)
+                        print(f"  [{i+1}/{len(history)}] Screenshot -> {path}")
+
+                elif action == "wait":
+                    ms = step.get("ms", 0)
+                    if ms:
+                        pilot.wait(ms)
+                        print(f"  [{i+1}/{len(history)}] Wait {ms}ms")
+
+                else:
+                    print(f"  [{i+1}/{len(history)}] Skip unknown action: {action}")
+
+            # Replay screenshots
+            for i, shot in enumerate(screenshots):
+                path = shot.get("path", "")
+                if path:
+                    print(f"  [screenshot-{i+1}/{len(screenshots)}] -> {path}")
+
         return self
 
     # ------------------------------------------------------------------
