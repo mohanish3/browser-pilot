@@ -1,6 +1,6 @@
 # browser-pilot
 
-> Automate browsers from the command line — screenshot, click, fill forms, or record sessions interactively. Built on [Playwright](https://playwright.dev/python/).
+> Automate browsers from the command line: screenshot, click, fill forms, or record sessions interactively. Built on [Playwright](https://playwright.dev/python/).
 
 ```bash
 pip install browser-pilot && playwright install chromium
@@ -40,7 +40,7 @@ with BrowserPilot() as pilot:
 - Fill and submit forms
 - Take viewport or full-page screenshots (save to file or return bytes)
 - Auto-timestamped screenshots
-- **Record mode** — browse manually; a floating button captures screenshots on demand; full navigation history saved to `session.json`
+- **Record mode**: browse manually; a floating button captures screenshots on demand; full navigation history saved to `session.json`
 - Works as a Python library **or** a CLI tool
 - Supports Chromium, Firefox, and WebKit
 
