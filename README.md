@@ -2,6 +2,8 @@
 
 > Automate browsers from the command line: screenshot, click, fill forms, or record sessions interactively. Built on [Playwright](https://playwright.dev/python/).
 
+![Demo: navigating Hacker News, clicking into "new", and scrolling, captured with browser-pilot itself](assets/demo.gif)
+
 ```bash
 pip install browser-pilot && playwright install chromium
 ```
