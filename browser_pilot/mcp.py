@@ -12,10 +12,19 @@ from playwright.sync_api import sync_playwright
 # Import the BrowserPilot class
 from .core import BrowserPilot
 
-# Create MCP server instance
-from mcp.server.fastmcp import FastMCP
+# Create MCP server instance.
+#
+# Compatibility shim: pyproject requires "mcp>=1.0.0", which also resolves to
+# mcp 2.x. In 2.x the class was renamed from FastMCP (mcp.server.fastmcp) to
+# MCPServer (mcp.server.mcpserver) and importing the old module raises
+# ModuleNotFoundError. Support both so `import browser_pilot` and the CLI keep
+# working on mcp 1.x and 2.x.
+try:
+    from mcp.server.fastmcp import FastMCP as _MCPServerClass
+except ModuleNotFoundError:
+    from mcp.server.mcpserver import MCPServer as _MCPServerClass
 
-mcp = FastMCP("browser-pilot", instructions="Browser automation MCP server for OpenClaw agents")
+mcp = _MCPServerClass("browser-pilot", instructions="Browser automation MCP server for OpenClaw agents")
 
 
 @mcp.tool()
